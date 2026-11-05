@@ -12,7 +12,7 @@ import {
   type Plan,
   type ProductId,
 } from "@/lib/copper/catalog";
-import { DOCUMENTS } from "@/lib/copper/documents";
+import { DOCUMENTS, pageUrl } from "@/lib/copper/documents";
 import { readInventory } from "@/lib/copper/inventory";
 import { PASSAGES } from "@/lib/copper/passages";
 
@@ -225,8 +225,7 @@ export async function searchDocs(query: string): Promise<DocSearchResult> {
       return {
         title: passage.title,
         page: passage.page,
-        // Browsers' PDF viewers open at the page named after #page=.
-        url: `${doc.file}#page=${passage.page}`,
+        url: pageUrl(doc, passage.page),
         text: passage.text.slice(`${passage.title}: `.length),
         score: Math.round(score * 100) / 100,
       };

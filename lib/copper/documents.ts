@@ -12,6 +12,10 @@ export type CopperDocument = {
   file: string;
 };
 
+/** A link that opens the PDF at one page (browsers' PDF viewers read #page=). */
+export const pageUrl = (doc: CopperDocument, page: number) =>
+  `${doc.file}#page=${page}`;
+
 export const DOCUMENTS: CopperDocument[] = [
   {
     id: "copper-home-user-guide",

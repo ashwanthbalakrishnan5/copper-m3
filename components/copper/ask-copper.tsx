@@ -28,6 +28,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { readLive } from "@/lib/ai/live";
 import { askCopper, type ChatMessage } from "@/lib/copper/assistant/ask";
+import { splitCitations } from "@/lib/copper/assistant/citations";
 import {
   type Progress,
   type ToolStep,
@@ -383,7 +384,7 @@ function Answer({
             </div>
           )}
           <p className="text-sm whitespace-pre-wrap">
-            {reply}
+            <CitedText text={reply} />
             {working && (
               <span className="bg-primary ml-0.5 inline-block h-4 w-0.5 animate-pulse align-middle" />
             )}
@@ -420,6 +421,25 @@ function Station({
       </p>
       {children}
     </section>
+  );
+}
+
+/** A reply with each [Title, p. N] citation linked to that page of the PDF. */
+function CitedText({ text }: { text: string }) {
+  return splitCitations(text).map((part, i) =>
+    typeof part === "string" ? (
+      part
+    ) : (
+      <a
+        key={i}
+        href={part.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary font-medium underline underline-offset-2"
+      >
+        {part.label}
+      </a>
+    ),
   );
 }
 
