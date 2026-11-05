@@ -22,6 +22,14 @@ export type ModelId = (typeof MODELS)[number]["id"];
  */
 export const DEFAULT_MODEL: ModelId = "google/gemini-2.5-flash";
 
+/**
+ * Turns text into a list of numbers so similar meanings can be found (Module 3).
+ * It isn't a chat model, so it isn't in MODELS.
+ */
+export const EMBEDDING_MODEL = "google/gemini-embedding-2";
+/** Shorter than the 3072 default: a smaller passages.json, almost as accurate. */
+export const EMBEDDING_DIMENSIONS = 768;
+
 /** AI_MODEL if it names an approved model, otherwise the default. */
 export function defaultModel(): ModelId {
   const id = process.env.AI_MODEL;

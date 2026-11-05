@@ -14,7 +14,8 @@
     "test": "vitest run",
     "format": "prettier --write .",
     "start-module": "node scripts/start-module.mjs",
-    "env:check": "node scripts/check-env.mjs"
+    "env:check": "node scripts/check-env.mjs",
+    "embed-docs": "node scripts/embed-docs.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "4.0.93",
@@ -62,6 +63,7 @@
     "prettier": "3.9.10",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3",
+    "unpdf": "1.9.1",
     "vitest": "5.0.3"
   }
 }

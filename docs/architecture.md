@@ -96,3 +96,30 @@ each step. Module 3 teaches it to answer from the customer documents.
 | Instructions | `lib/copper/assistant/instructions.ts` | `COPPER_INSTRUCTIONS`. Copper says it can't help yet with warranty, setup, troubleshooting or privacy |
 | Data | `lib/copper/inventory.ts`, `lib/copper/documents.ts` | Stock from `lib/copper/data/inventory.json`; `DOCUMENTS`: the four customer documents and their PDF paths under `public/docs/`. The PDFs are added in class |
 | AI calls | `{ module: 2, feature: "ask-copper" }` | One streamed call per question |
+
+## Module 3: Document passages and embeddings
+
+**Summary:** The four customer PDFs in `public/docs/` are split into passages
+of a few sentences and embedded with Gemini, so Ask Copper can find the
+passages that answer a question and cite their page.
+
+| Piece | Where | What it does |
+|---|---|---|
+| Build script | `scripts/embed-docs.mjs` (`npm run embed-docs`) | Reads each PDF in `DOCUMENTS` page by page (with `unpdf`), splits pages with `splitPage()`, embeds every passage and writes the JSON. Re-run it when a PDF changes |
+| Splitter | `lib/copper/split-passages.ts` | `splitPage()`: drops the footer lines, then groups sentences three at a time (at most ~600 characters) |
+| Data | `lib/copper/data/passages.json`, `lib/copper/passages.ts` | `PASSAGES`: `documentId`, `title`, `page`, `text` (starts with the document title) and `embedding`. Importing it loads every passage into memory once per server |
+| AI calls | `callEmbedMany` in `lib/ai/call.ts`, `{ module: 3, feature: "embed-docs" }` | `gemini-embedding-2` at 768 dimensions. One call per run of the script, not per question. Google doesn't report embedding tokens, so the log's tokens and cost are null |
+
+**Data flow:** PDF → pages → passages → Gemini embeddings → `passages.json` →
+`PASSAGES` in memory.
+
+**Decisions and trade-offs:** A JSON file in memory instead of a vector
+database: about 120 passages is under 1 MB, so searching all of them is
+instant and needs no new service. 768 dimensions instead of 3072 keeps the
+file small with little loss in accuracy. The title goes at the start of each
+passage so similar passages from different documents (Copper Home vs. Copper
+Notes) embed differently.
+
+**Risks and open questions:** Questions must be embedded with the same model
+and dimensions (`EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS`) or the search
+returns nonsense. Tables lose their columns when turned into text.

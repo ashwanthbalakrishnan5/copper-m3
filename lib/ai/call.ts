@@ -1,7 +1,13 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { generateText, Output, streamText } from "ai";
+import { embedMany, generateText, Output, streamText } from "ai";
 import type { z } from "zod";
-import { defaultModel, MODELS, type ModelId } from "@/lib/ai/models";
+import {
+  defaultModel,
+  EMBEDDING_DIMENSIONS,
+  EMBEDDING_MODEL,
+  MODELS,
+  type ModelId,
+} from "@/lib/ai/models";
 import { costUsd } from "@/lib/ai/pricing";
 
 // Every model call in the app goes through this file, so each one is logged
@@ -36,7 +42,7 @@ type TextOptions = DistributiveOmit<
 export type AiCallRow = {
   module: number;
   feature: string;
-  model: ModelId;
+  model: ModelId | typeof EMBEDDING_MODEL;
   input_tokens: number | null;
   output_tokens: number | null;
   cost_usd: number | null;
@@ -45,15 +51,19 @@ export type AiCallRow = {
   created_at: string;
 };
 
-function languageModel(model: ModelId) {
+function google() {
   const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
   if (!googleKey) throw new AiNotConfiguredError();
+  return createGoogleGenerativeAI({ apiKey: googleKey });
+}
+
+function languageModel(model: ModelId) {
   const entry = MODELS.find((m) => m.id === model);
   const id =
     entry && "googleId" in entry
       ? entry.googleId
       : model.slice("google/".length);
-  return createGoogleGenerativeAI({ apiKey: googleKey })(id);
+  return google()(id);
 }
 
 /** Prints one line per model call, so the cost and time are visible. */
@@ -124,6 +134,44 @@ export async function callObject<Schema extends z.ZodType>(
   // Spreading `rest` loses generateText's output type; Output.object has
   // already validated it against `schema`, so restore the type here.
   return result as typeof result & { output: z.infer<Schema> };
+}
+
+/**
+ * Embeds many texts in one go; read `result.embeddings` (same order as `values`).
+ * Example: callEmbedMany({ module: 3, feature: "embed-docs" }, passages)
+ */
+export async function callEmbedMany(
+  info: Omit<CallInfo, "model">,
+  values: string[],
+) {
+  const started = performance.now();
+  // Google doesn't report tokens for embeddings, so tokens and cost are null.
+  const log = (ok: boolean) =>
+    logCall({
+      module: info.module,
+      feature: info.feature,
+      model: EMBEDDING_MODEL,
+      input_tokens: null,
+      output_tokens: null,
+      cost_usd: null,
+      latency_ms: Math.round(performance.now() - started),
+      ok,
+      created_at: new Date().toISOString(),
+    });
+  try {
+    const result = await embedMany({
+      model: google().embedding(EMBEDDING_MODEL.slice("google/".length)),
+      values,
+      providerOptions: {
+        google: { outputDimensionality: EMBEDDING_DIMENSIONS },
+      },
+    });
+    await log(true);
+    return result;
+  } catch (error) {
+    if (!(error instanceof AiNotConfiguredError)) await log(false);
+    throw error;
+  }
 }
 
 type StreamOptions = DistributiveOmit<

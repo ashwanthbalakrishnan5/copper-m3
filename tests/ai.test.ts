@@ -1,20 +1,28 @@
 // @vitest-environment node
-import { MockLanguageModelV4 } from "ai/test";
+import { MockEmbeddingModelV4, MockLanguageModelV4 } from "ai/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   AiNotConfiguredError,
+  callEmbedMany,
   callObject,
   callText,
   isAiConfigured,
 } from "@/lib/ai/call";
-import { MODELS } from "@/lib/ai/models";
+import { EMBEDDING_MODEL, MODELS } from "@/lib/ai/models";
 import { costUsd, PRICING } from "@/lib/ai/pricing";
 
 // Google hands back whatever mock model the test sets.
 let model: MockLanguageModelV4;
+const embeddingModel = new MockEmbeddingModelV4({
+  doEmbed: async ({ values }) => ({
+    embeddings: values.map((v) => [v.charCodeAt(0), 1]),
+    warnings: [],
+  }),
+});
 vi.mock("@ai-sdk/google", () => ({
-  createGoogleGenerativeAI: () => () => model,
+  createGoogleGenerativeAI: () =>
+    Object.assign(() => model, { embedding: () => embeddingModel }),
 }));
 
 function replyWith(text: string, input = 1000, output = 200) {
@@ -139,5 +147,25 @@ describe("lib/ai/call.ts", () => {
     await expect(
       callText({ module: 1, feature: "test" }, { prompt: "hi" }),
     ).rejects.toBeInstanceOf(AiNotConfiguredError);
+  });
+
+  it("embeds many texts in order and logs one row", async () => {
+    const rows = captureLog();
+    const { embeddings } = await callEmbedMany(
+      { module: 3, feature: "embed-docs" },
+      ["a", "b"],
+    );
+    expect(embeddings).toEqual([
+      [97, 1], // "a"
+      [98, 1], // "b"
+    ]);
+    expect(rows()).toEqual([
+      expect.objectContaining({
+        module: 3,
+        feature: "embed-docs",
+        model: EMBEDDING_MODEL,
+        ok: true,
+      }),
+    ]);
   });
 });
