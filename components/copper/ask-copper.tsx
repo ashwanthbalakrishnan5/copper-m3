@@ -605,6 +605,29 @@ function ToolOutput({ name, output }: { name: string; output: any }) {
       </div>
     );
   }
+  if (name === "search_docs" && output?.matches)
+    return (
+      <ol className="space-y-2 text-xs">
+        {output.matches.map((m: any) => (
+          <li key={`${m.url}-${m.text}`} className="space-y-0.5">
+            <div className="flex items-baseline justify-between gap-2">
+              <a
+                href={m.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary font-medium underline-offset-2 hover:underline"
+              >
+                {m.title}, page {m.page}
+              </a>
+              <span className="text-muted-foreground shrink-0 font-mono">
+                {m.score.toFixed(2)}
+              </span>
+            </div>
+            <p className="text-muted-foreground line-clamp-3">{m.text}</p>
+          </li>
+        ))}
+      </ol>
+    );
   // A tool without its own layout yet: show what came back as plain text.
   return (
     <pre className="max-h-48 overflow-auto text-xs whitespace-pre-wrap">

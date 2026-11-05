@@ -108,10 +108,12 @@ passages that answer a question and cite their page.
 | Build script | `scripts/embed-docs.mjs` (`npm run embed-docs`) | Reads each PDF in `DOCUMENTS` page by page (with `unpdf`), splits pages with `splitPage()`, embeds every passage and writes the JSON. Re-run it when a PDF changes |
 | Splitter | `lib/copper/split-passages.ts` | `splitPage()`: drops the footer lines, then groups sentences three at a time (at most ~600 characters) |
 | Data | `lib/copper/data/passages.json`, `lib/copper/passages.ts` | `PASSAGES`: `documentId`, `title`, `page`, `text` (starts with the document title) and `embedding`. Importing it loads every passage into memory once per server |
-| AI calls | `callEmbedMany` in `lib/ai/call.ts`, `{ module: 3, feature: "embed-docs" }` | `gemini-embedding-2` at 768 dimensions. One call per run of the script, not per question. Google doesn't report embedding tokens, so the log's tokens and cost are null |
+| Tool | `lib/copper/assistant/tools.ts` | `search_docs`: embeds the question, ranks every passage by cosine similarity and returns the 5 closest with title, page, a `/docs/<file>.pdf#page=N` link and a score. The tool card lists them with links; the instructions tell Copper to use it for setup, troubleshooting, warranty and policy questions and to cite the page |
+| AI calls | `callEmbedMany` in `lib/ai/call.ts`, `{ module: 3, feature: "embed-docs" }` | `gemini-embedding-2` at 768 dimensions. One call per run of the script, plus one `{ module: 3, feature: "search-docs" }` call per search. Google doesn't report embedding tokens, so the log's tokens and cost are null |
 
 **Data flow:** PDF → pages → passages → Gemini embeddings → `passages.json` →
-`PASSAGES` in memory.
+`PASSAGES` in memory. Question → `search_docs` → question embedding → 5
+closest passages → Copper answers from them and cites the page.
 
 **Decisions and trade-offs:** A JSON file in memory instead of a vector
 database: about 120 passages is under 1 MB, so searching all of them is
@@ -122,4 +124,6 @@ Notes) embed differently.
 
 **Risks and open questions:** Questions must be embedded with the same model
 and dimensions (`EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS`) or the search
-returns nonsense. Tables lose their columns when turned into text.
+returns nonsense. Tables lose their columns when turned into text. Embeddings match meaning
+better than exact strings, so an error code like C-47 can rank below other
+error-code passages (it was third in testing); keyword search alongside would fix that.

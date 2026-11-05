@@ -1,16 +1,20 @@
-// Module 2: the four tools Ask Copper can use. Products and prices come from
-// lib/copper/catalog.ts and stock from lib/copper/inventory.ts, so the
+// The tools Ask Copper can use. Products and prices come from
+// lib/copper/catalog.ts and stock from lib/copper/inventory.ts (Module 2);
+// search_docs finds passages in the customer documents (Module 3). So the
 // chatbot never has to make them up.
 // Each tool returns plain data; the model writes the reply around it.
 import { tool } from "ai";
 import { z } from "zod";
+import { callEmbedMany } from "@/lib/ai/call";
 import {
   getPlans,
   getProducts,
   type Plan,
   type ProductId,
 } from "@/lib/copper/catalog";
+import { DOCUMENTS } from "@/lib/copper/documents";
 import { readInventory } from "@/lib/copper/inventory";
+import { PASSAGES } from "@/lib/copper/passages";
 
 export type ProductList = {
   products: {
@@ -177,6 +181,59 @@ export async function checkAvailability(
   };
 }
 
+export type DocMatch = {
+  title: string;
+  page: number;
+  /** Opens the PDF at that page. */
+  url: string;
+  /** The passage, without the document title it was embedded with. */
+  text: string;
+  /** How close in meaning to the query: 1 is identical. */
+  score: number;
+};
+
+export type DocSearchResult = { matches: DocMatch[] };
+
+const SEARCH_RESULTS = 5;
+
+/** Cosine similarity: how closely two embeddings point the same way. */
+function similarity(a: number[], b: number[]): number {
+  let dot = 0;
+  let aa = 0;
+  let bb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    aa += a[i] * a[i];
+    bb += b[i] * b[i];
+  }
+  return dot / Math.sqrt(aa * bb);
+}
+
+/** search_docs: the passages in the customer documents closest in meaning to the query. */
+export async function searchDocs(query: string): Promise<DocSearchResult> {
+  const {
+    embeddings: [embedding],
+  } = await callEmbedMany({ module: 3, feature: "search-docs" }, [query]);
+  const matches = PASSAGES.map((passage) => ({
+    passage,
+    score: similarity(embedding, passage.embedding),
+  }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, SEARCH_RESULTS)
+    .map(({ passage, score }) => {
+      const doc = DOCUMENTS.find((d) => d.id === passage.documentId)!;
+      return {
+        title: passage.title,
+        page: passage.page,
+        // Browsers' PDF viewers open at the page named after #page=.
+        url: `${doc.file}#page=${passage.page}`,
+        text: passage.text.slice(`${passage.title}: `.length),
+        score: Math.round(score * 100) / 100,
+      };
+    });
+  return { matches };
+}
+
 export const copperTools = {
   get_products: tool({
     description:
@@ -200,5 +257,18 @@ export const copperTools = {
       "Checks today's stock for a Copper product, for every color or just one.",
     inputSchema: checkAvailabilityInput,
     execute: async (input) => checkAvailability(input),
+  }),
+  search_docs: tool({
+    description:
+      "Searches Copper's customer documents (the Copper Home and Copper Notes user guides, the Terms and Conditions, and the Copper Plus FAQ). Returns the 5 passages closest in meaning to the query, each with its document title, page number and a link to that page.",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .min(2)
+        .describe(
+          "What to look for, with the product name if known, e.g. 'reset Wi-Fi on Copper Home'.",
+        ),
+    }),
+    execute: async ({ query }) => searchDocs(query),
   }),
 };
